@@ -14,44 +14,53 @@
 # limitations under the License.
 
 from django.db import transaction
-from rest_framework import generics
+from django.db.models import Count
+from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
-from rest_framework_bulk import BulkModelViewSet
+from orgs.mixins.api import OrgBulkModelViewSet
+from orgs.mixins import generics
 
-from common.mixins import IDInFilterMixin
 from common.utils import get_logger
-from ..hands import IsSuperUser
+from ..hands import IsOrgAdmin
 from ..models import AdminUser, Asset
 from .. import serializers
-from ..tasks import test_admin_user_connectability_manual
+from ..tasks import test_admin_user_connectivity_manual
 
 
 logger = get_logger(__file__)
 __all__ = [
     'AdminUserViewSet', 'ReplaceNodesAdminUserApi',
     'AdminUserTestConnectiveApi', 'AdminUserAuthApi',
+    'AdminUserAssetsListView',
 ]
 
 
-class AdminUserViewSet(IDInFilterMixin, BulkModelViewSet):
+class AdminUserViewSet(OrgBulkModelViewSet):
     """
     Admin user api set, for add,delete,update,list,retrieve resource
     """
-    queryset = AdminUser.objects.all()
+    model = AdminUser
+    filter_fields = ("name", "username")
+    search_fields = filter_fields
     serializer_class = serializers.AdminUserSerializer
-    permission_classes = (IsSuperUser,)
+    permission_classes = (IsOrgAdmin,)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        queryset = queryset.annotate(_assets_amount=Count('assets'))
+        return queryset
 
 
 class AdminUserAuthApi(generics.UpdateAPIView):
-    queryset = AdminUser.objects.all()
+    model = AdminUser
     serializer_class = serializers.AdminUserAuthSerializer
-    permission_classes = (IsSuperUser,)
+    permission_classes = (IsOrgAdmin,)
 
 
 class ReplaceNodesAdminUserApi(generics.UpdateAPIView):
-    queryset = AdminUser.objects.all()
+    model = AdminUser
     serializer_class = serializers.ReplaceNodeAdminUserSerializer
-    permission_classes = (IsSuperUser,)
+    permission_classes = (IsOrgAdmin,)
 
     def update(self, request, *args, **kwargs):
         admin_user = self.get_object()
@@ -72,12 +81,29 @@ class ReplaceNodesAdminUserApi(generics.UpdateAPIView):
 
 class AdminUserTestConnectiveApi(generics.RetrieveAPIView):
     """
-    Test asset admin user connectivity
+    Test asset admin user assets_connectivity
     """
-    queryset = AdminUser.objects.all()
-    permission_classes = (IsSuperUser,)
+    model = AdminUser
+    permission_classes = (IsOrgAdmin,)
+    serializer_class = serializers.TaskIDSerializer
 
     def retrieve(self, request, *args, **kwargs):
         admin_user = self.get_object()
-        task = test_admin_user_connectability_manual.delay(admin_user)
+        task = test_admin_user_connectivity_manual.delay(admin_user)
         return Response({"task": task.id})
+
+
+class AdminUserAssetsListView(generics.ListAPIView):
+    permission_classes = (IsOrgAdmin,)
+    serializer_class = serializers.AssetSimpleSerializer
+    filter_fields = ("hostname", "ip")
+    http_method_names = ['get']
+    search_fields = filter_fields
+
+    def get_object(self):
+        pk = self.kwargs.get('pk')
+        return get_object_or_404(AdminUser, pk=pk)
+
+    def get_queryset(self):
+        admin_user = self.get_object()
+        return admin_user.get_related_assets()

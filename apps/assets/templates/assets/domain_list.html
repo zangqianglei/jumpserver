@@ -1,6 +1,13 @@
 {% extends '_base_list.html' %}
 {% load i18n static %}
 {% block table_search %}{% endblock %}
+
+{% block help_message %}
+    {% trans 'The domain function is added to address the fact that some environments (such as the hybrid cloud) cannot be connected directly by jumping on the gateway server.' %}
+    <br>
+    {% trans 'JMS => Domain gateway => Target assets' %}
+{% endblock %}
+
 {% block table_container %}
 <div class="uc pull-left  m-r-5">
     <a href="{% url 'assets:domain-create' %}" class="btn btn-sm btn-primary"> {% trans "Create domain" %} </a>
@@ -30,6 +37,7 @@ function initTable() {
         ele: $('#domain_list_table'),
         columnDefs: [
             {targets: 1, createdCell: function (td, cellData, rowData) {
+                cellData = htmlEscape(cellData);
                 var detail_btn = '<a href="{% url "assets:domain-detail" pk=DEFAULT_PK %}">' + cellData + '</a>';
                 $(td).html(detail_btn.replace('{{ DEFAULT_PK }}', rowData.id));
              }},
@@ -46,12 +54,12 @@ function initTable() {
         ],
         ajax_url: '{% url "api-assets:domain-list" %}',
         columns: [
-            {data: "id"}, {data: "name" }, {data: "asset_count" },
-            {data: "gateway_count" }, {data: "comment" }, {data: "id"}
+            {data: "id"}, {data: "name" }, {data: "asset_count", orderable: false },
+            {data: "gateway_count", orderable: false }, {data: "comment" }, {data: "id", orderable: false, width: "120px"}
         ],
         op_html: $('#actions').html()
     };
-    jumpserver.initDataTable(options);
+    jumpserver.initServerSideDataTable(options);
 }
 $(document).ready(function(){
     initTable();
@@ -69,6 +77,3 @@ $(document).ready(function(){
 });
 </script>
 {% endblock %}
-
-
-

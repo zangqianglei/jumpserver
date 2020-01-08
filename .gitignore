@@ -17,7 +17,7 @@ dump.rdb
 .idea/
 db.sqlite3
 config.py
-migrations/
+config.yml
 *.log
 host_rsa_key
 *.bat
@@ -32,3 +32,7 @@ django.db
 celerybeat-schedule.db
 data/static
 docs/_build/
+xpack
+logs/*
+### Vagrant ###
+.vagrant/

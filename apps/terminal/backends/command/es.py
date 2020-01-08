@@ -1,41 +1,30 @@
 # -*- coding: utf-8 -*-
 #
 
-from jms_es_sdk import ESStore
+from datetime import datetime
+from jms_storage.es import ESStorage
 from .base import CommandBase
 from .models import AbstractSessionCommand
 
 
-class CommandStore(CommandBase, ESStore):
+class CommandStore(ESStorage, CommandBase):
     def __init__(self, params):
-        hosts = params.get('HOSTS', ['http://localhost'])
-        ESStore.__init__(self, hosts=hosts)
-
-    def save(self, command):
-        return ESStore.save(self, command)
-
-    def bulk_save(self, commands):
-        return ESStore.bulk_save(self, commands)
+        super().__init__(params)
 
     def filter(self, date_from=None, date_to=None,
                user=None, asset=None, system_user=None,
                input=None, session=None):
 
-        data = ESStore.filter(
-            self, date_from=date_from, date_to=date_to,
-            user=user, asset=asset, system_user=system_user,
-            input=input, session=session
-        )
+        if date_from is not None:
+            if isinstance(date_from, float):
+                date_from = datetime.fromtimestamp(date_from)
+        if date_to is not None:
+            if isinstance(date_to, float):
+                date_to = datetime.fromtimestamp(date_to)
+
+        data = super().filter(date_from=date_from, date_to=date_to,
+                              user=user, asset=asset, system_user=system_user,
+                              input=input, session=session)
         return AbstractSessionCommand.from_multi_dict(
             [item["_source"] for item in data["hits"] if item]
         )
-
-    def count(self, date_from=None, date_to=None,
-              user=None, asset=None, system_user=None,
-              input=None, session=None):
-        amount = ESStore.count(
-            self, date_from=date_from, date_to=date_to,
-            user=user, asset=asset, system_user=system_user,
-            input=input, session=session
-        )
-        return amount

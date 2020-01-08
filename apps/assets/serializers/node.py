@@ -1,67 +1,47 @@
 # -*- coding: utf-8 -*-
 from rest_framework import serializers
-from rest_framework_bulk.serializers import BulkListSerializer
+from django.utils.translation import ugettext as _
 
-from common.mixins import BulkSerializerMixin
+from orgs.mixins.serializers import BulkOrgResourceModelSerializer
 from ..models import Asset, Node
-from .asset import AssetGrantedSerializer
 
 
-class NodeGrantedSerializer(BulkSerializerMixin, serializers.ModelSerializer):
-    """
-    授权资产组
-    """
-    assets_granted = AssetGrantedSerializer(many=True, read_only=True)
-    assets_amount = serializers.SerializerMethodField()
-    parent = serializers.SerializerMethodField()
-    name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Node
-        fields = [
-            'id', 'key', 'name', 'value', 'parent',
-            'assets_granted', 'assets_amount',
-        ]
-
-    @staticmethod
-    def get_assets_amount(obj):
-        return len(obj.assets_granted)
-
-    @staticmethod
-    def get_name(obj):
-        return obj.name
-
-    @staticmethod
-    def get_parent(obj):
-        return obj.parent.id
+__all__ = [
+    'NodeSerializer', "NodeAddChildrenSerializer",
+    "NodeAssetsSerializer",
+]
 
 
-class NodeSerializer(serializers.ModelSerializer):
-    parent = serializers.SerializerMethodField()
-    assets_amount = serializers.SerializerMethodField()
+class NodeSerializer(BulkOrgResourceModelSerializer):
+    name = serializers.ReadOnlyField(source='value')
+    value = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, label=_("value")
+    )
 
     class Meta:
         model = Node
-        fields = ['id', 'key', 'value', 'parent', 'assets_amount', 'is_asset']
-        list_serializer_class = BulkListSerializer
+        only_fields = ['id', 'key', 'value', 'org_id']
+        fields = only_fields + ['name', 'full_value']
+        read_only_fields = ['key', 'org_id']
 
-    @staticmethod
-    def get_parent(obj):
-        return obj.parent.id
+    def validate_value(self, data):
+        if self.instance:
+            instance = self.instance
+            siblings = instance.get_siblings()
+        else:
+            instance = Node.org_root()
+            siblings = instance.get_children()
+        if siblings.filter(value=data):
+            raise serializers.ValidationError(
+                _('The same level node name cannot be the same')
+            )
+        return data
 
-    @staticmethod
-    def get_assets_amount(obj):
-        return obj.get_all_assets().count()
 
-    def get_fields(self):
-        fields = super().get_fields()
-        field = fields["key"]
-        field.required = False
-        return fields
-
-
-class NodeAssetsSerializer(serializers.ModelSerializer):
-    assets = serializers.PrimaryKeyRelatedField(many=True, queryset=Asset.objects.all())
+class NodeAssetsSerializer(BulkOrgResourceModelSerializer):
+    assets = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Asset.objects
+    )
 
     class Meta:
         model = Node
@@ -70,3 +50,4 @@ class NodeAssetsSerializer(serializers.ModelSerializer):
 
 class NodeAddChildrenSerializer(serializers.Serializer):
     nodes = serializers.ListField()
+
